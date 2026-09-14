@@ -1,0 +1,19 @@
+# Secrets and databases
+.env
+*.sqlite3
+
+# Frontend (React/Vite)
+node_modules/
+dist/
+dist-ssr/
+
+# Backend (Django/Python)
+__pycache__/
+*.pyc
+venv/
+env/
+
+# OS & Editor Clutter
+.DS_Store
+.vscode/
+.idea/
