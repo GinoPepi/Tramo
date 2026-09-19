@@ -1,4 +1,5 @@
 from rest_framework import serializers
 
 class HandleMessageSerializer(serializers.Serializer):
-    message = serializers.CharField(max_length=100, allow_blank=False)
+    message = serializers.CharField(allow_blank=True, required=False)
+    file = serializers.FileField(required=False)
