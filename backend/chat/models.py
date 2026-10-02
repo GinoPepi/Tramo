@@ -1,49 +1,45 @@
 from django.db import models
 
-
-class Cuaderno(models.Model):
-    nombre = models.CharField(max_length=150)
-    descripcion = models.TextField(blank=True, null=True)
-    creado_el = models.DateTimeField(auto_now_add=True)
-    actualizado_el = models.DateTimeField(auto_now=True)
+class Notebook(models.Model):
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Cuaderno"
-        verbose_name_plural = "Cuadernos"
-        ordering = ['-creado_el']
+        verbose_name = "Notebook"
+        verbose_name_plural = "Notebooks"
+        ordering = ['-created_at']
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
-
-class Documento(models.Model):
-    class EstadoProcesamiento(models.TextChoices):
-        PENDIENTE = 'PENDIENTE', 'Pendiente'
-        PROCESANDO = 'PROCESANDO', 'Procesando'
-        COMPLETADO = 'COMPLETADO', 'Completado'
+class Document(models.Model):
+    class ProcessingStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        PROCESSING = 'PROCESSING', 'Processing'
+        COMPLETED = 'COMPLETED', 'Completed'
         ERROR = 'ERROR', 'Error'
 
-    cuaderno = models.ForeignKey(
-        Cuaderno,
+    notebook = models.ForeignKey(
+        Notebook,
         on_delete=models.CASCADE,
-        related_name='documentos'
+        related_name='documents'
     )
-    titulo = models.CharField(max_length=255)
-    archivo = models.FileField(upload_to='documentos/%Y/%m/')
-    total_paginas = models.PositiveIntegerField(default=0)
-    estado = models.CharField(
+    title = models.CharField(max_length=255)
+    file = models.FileField(upload_to='documents/%Y/%m/')
+    status = models.CharField(
         max_length=20,
-        choices=EstadoProcesamiento.choices,
-        default=EstadoProcesamiento.PENDIENTE
+        choices=ProcessingStatus.choices,
+        default=ProcessingStatus.PENDING
     )
-    texto_completo = models.TextField(blank=True, null=True)  
-    creado_el = models.DateTimeField(auto_now_add=True)
-    actualizado_el = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Documento"
-        verbose_name_plural = "Documentos"
-        ordering = ['-creado_el']
+        verbose_name = "Document"
+        verbose_name_plural = "Documents"
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.titulo} — {self.cuaderno.nombre}"
+        return f"{self.title} — {self.notebook.name}"

@@ -1,19 +1,25 @@
 from django.contrib import admin
-from .models import Cuaderno, Documento
+from .models import Notebook, Document
 
+class DocumentInline(admin.TabularInline):
+    model = Document
+    extra = 0
+    fields = ('title', 'file', 'status', 'created_at')
+    readonly_fields = ('created_at',)
 
-@admin.register(Cuaderno)
-class CuadernoAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'creado_el', 'total_documentos')
-    search_fields = ('nombre', 'descripcion')
+@admin.register(Notebook)
+class NotebookAdmin(admin.ModelAdmin):
+    list_display = ('name', 'created_at', 'total_documents')
+    search_fields = ('name', 'description')
+    inlines = [DocumentInline]
 
-    def total_documentos(self, obj):
-        return obj.documentos.count()
-    total_documentos.short_description = "Documentos"
+    @admin.display(description="Documents")
+    def total_documents(self, obj):
+        return obj.documents.count()
 
-
-@admin.register(Documento)
-class DocumentoAdmin(admin.ModelAdmin):
-    list_display = ('titulo', 'cuaderno', 'estado', 'total_paginas', 'creado_el')
-    list_filter = ('estado', 'cuaderno')
-    search_fields = ('titulo', 'cuaderno__nombre')
+@admin.register(Document)
+class DocumentAdmin(admin.ModelAdmin):
+    list_display = ('title', 'notebook', 'status', 'created_at')
+    list_filter = ('status', 'notebook')
+    search_fields = ('title', 'notebook__name')
+    readonly_fields = ('created_at', 'updated_at')
