@@ -1,11 +1,14 @@
-# my_app/views.py
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import viewsets, status
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from .serializers import HandleMessageSerializer
-from .services.llm_service import handle_message
+from .models import Notebook, Document
+from .serializers import (
+    NotebookSerializer,
+    DocumentSerializer,
+    HandleMessageSerializer,
+)
 
 class HandleMessageView(APIView):
 
@@ -31,3 +34,22 @@ class HandleMessageView(APIView):
             
         # If React sent bad data, instantly return a 400 error explaining exactly what was wrong
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class NotebookViewSet(viewsets.ModelViewSet):
+    queryset = Notebook.objects.all().prefetch_related('documents')
+    serializer_class = NotebookSerializer
+
+
+class DocumentViewSet(viewsets.ModelViewSet):
+    queryset = Document.objects.all()
+    serializer_class = DocumentSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    def perform_create(self, serializer):
+        archivo = self.request.FILES.get('file')
+        title = self.request.data.get('title')
+
+        if not title and archivo:
+            title = archivo.name.replace('.pdf', '')
+
+        serializer.save(title=title)
