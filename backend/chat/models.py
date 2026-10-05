@@ -1,4 +1,5 @@
 from django.db import models
+from pathlib import Path
 
 class Notebook(models.Model):
     name = models.CharField(max_length=150)
@@ -26,13 +27,14 @@ class Document(models.Model):
         on_delete=models.CASCADE,
         related_name='documents'
     )
-    title = models.CharField(max_length=255)
+    title = models.CharField(max_length=255, blank=True)
     file = models.FileField(upload_to='documents/%Y/%m/')
     status = models.CharField(
         max_length=20,
         choices=ProcessingStatus.choices,
         default=ProcessingStatus.PENDING
     )
+    tramos = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -40,6 +42,13 @@ class Document(models.Model):
         verbose_name = "Document"
         verbose_name_plural = "Documents"
         ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.title and self.file:
+            self.title = Path(self.file.name).stem
+            
+        super().save(*args, **kwargs) 
+
 
     def __str__(self):
         return f"{self.title} — {self.notebook.name}"

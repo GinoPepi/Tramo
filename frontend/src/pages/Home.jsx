@@ -1,33 +1,56 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Home.css';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import ConfirmModal from '../components/ConfirmModal';
+import { TrashIcon, ChevronLeftIcon } from '../components/Icons';
 
 const API_BASE = 'http://localhost:8000/chat';
 
 export default function Home() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [notebooks, setNotebooks] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
   const [menuAbierto, setMenuAbierto] = useState(false);
-  const [cuadernoActivo, setCuadernoActivo] = useState(null);
+  const [cuadernoActivo, setCuadernoActivo] = useState(() => location.state?.notebook || null);
+  const [subiendoDoc, setSubiendoDoc] = useState(false);
 
   // Estados para la burbuja de nuevo cuaderno
   const [modalAbierto, setModalAbierto] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [guardando, setGuardando] = useState(false);
 
+  // Estados para el modal in-app de confirmación de eliminación
+  const [modalConfirmacion, setModalConfirmacion] = useState(null);
+  const [eliminandoItem, setEliminandoItem] = useState(false);
+
   const fileInputRef = useRef(null);
   const inputNombreRef = useRef(null);
-  const navigate = useNavigate();
 
   const usuario = {
     nombre: 'Gino',
     email: 'usuario@ejemplo.com',
   };
 
-  const abrirChatDocumento = (doc) => {
-    navigate('/chat', { state: { document: doc } });
+  const abrirChatDocumento = (doc, cuaderno = cuadernoActivo) => {
+    const freshCuaderno = notebooks.find((n) => n.id === (cuaderno?.id || doc?.notebook)) || cuaderno;
+    const freshDoc = freshCuaderno?.documents?.find((d) => d.id === doc.id) || doc;
+
+    navigate('/chat', {
+      state: {
+        document: freshDoc,
+        notebook: freshCuaderno,
+        notebookId: freshCuaderno?.id || freshDoc?.notebook,
+      },
+    });
+  };
+
+  const volverAListaCuadernos = () => {
+    setCuadernoActivo(null);
+    navigate('/', { replace: true, state: {} });
   };
 
   // 1. GET: Cargar cuadernos
@@ -39,6 +62,14 @@ export default function Home() {
       if (!res.ok) throw new Error('No se pudo conectar con el catálogo de cuadernos.');
       const data = await res.json();
       setNotebooks(data);
+
+      const targetId = location.state?.notebookId || location.state?.notebook?.id;
+      if (targetId) {
+        const found = data.find((n) => n.id === targetId);
+        if (found) {
+          setCuadernoActivo(found);
+        }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -49,6 +80,21 @@ export default function Home() {
   useEffect(() => {
     cargarCuadernos();
   }, []);
+
+  // Sincronizar cuadernoActivo si location.state cambia o al cargar notebooks frescos
+  useEffect(() => {
+    const targetId = location.state?.notebookId || location.state?.notebook?.id;
+    if (targetId && notebooks.length > 0) {
+      const found = notebooks.find((n) => n.id === targetId);
+      if (found) {
+        setCuadernoActivo(found);
+        return;
+      }
+    }
+    if (location.state?.notebook) {
+      setCuadernoActivo(location.state.notebook);
+    }
+  }, [location.state, notebooks]);
 
   // Autofoco y escape en el modal
   useEffect(() => {
@@ -114,6 +160,7 @@ export default function Home() {
     formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
 
     try {
+      setSubiendoDoc(true);
       const res = await fetch(`${API_BASE}/documents/`, {
         method: 'POST',
         body: formData,
@@ -123,22 +170,112 @@ export default function Home() {
 
       const nuevoDoc = await res.json();
 
-      setCuadernoActivo((prev) => ({
-        ...prev,
-        documents: [nuevoDoc, ...(prev.documents || [])],
-      }));
+      const cuadernoActualizado = {
+        ...cuadernoActivo,
+        documents: [nuevoDoc, ...(cuadernoActivo.documents || [])],
+      };
+
+      setCuadernoActivo(cuadernoActualizado);
 
       setNotebooks((prev) =>
         prev.map((c) =>
           c.id === cuadernoActivo.id
-            ? { ...c, documents: [nuevoDoc, ...(c.documents || [])] }
+            ? cuadernoActualizado
             : c
         )
       );
+
+      // Abrir automáticamente la vista de estudio/chat con el documento nuevo
+      abrirChatDocumento(nuevoDoc, cuadernoActualizado);
     } catch (err) {
       alert(err.message);
     } finally {
+      setSubiendoDoc(false);
       event.target.value = '';
+    }
+  };
+
+  // 4. DELETE: Eliminar cuaderno con modal in-app
+  const solicitarEliminarCuaderno = (cuadernoId, cuadernoNombre) => {
+    setModalConfirmacion({
+      tipo: 'cuaderno',
+      id: cuadernoId,
+      titulo: '¿Eliminar cuaderno?',
+      mensaje: `¿Estás seguro de que querés eliminar el cuaderno "${cuadernoNombre || 'seleccionado'}"? Se eliminarán también todos sus documentos asociados.`,
+      accion: () => ejecutarEliminarCuaderno(cuadernoId),
+    });
+  };
+
+  const ejecutarEliminarCuaderno = async (cuadernoId) => {
+    try {
+      setEliminandoItem(true);
+      const res = await fetch(`${API_BASE}/notebooks/${cuadernoId}/`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok && res.status !== 204) {
+        throw new Error('Error al eliminar el cuaderno.');
+      }
+
+      setNotebooks((prev) => prev.filter((n) => n.id !== cuadernoId));
+
+      if (cuadernoActivo && cuadernoActivo.id === cuadernoId) {
+        volverAListaCuadernos();
+      }
+      setModalConfirmacion(null);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setEliminandoItem(false);
+    }
+  };
+
+  // 5. DELETE: Eliminar documento con modal in-app
+  const solicitarEliminarDocumento = (docId, docTitulo) => {
+    setModalConfirmacion({
+      tipo: 'documento',
+      id: docId,
+      titulo: '¿Eliminar documento?',
+      mensaje: `¿Estás seguro de que querés eliminar el documento "${docTitulo || 'seleccionado'}"?`,
+      accion: () => ejecutarEliminarDocumento(docId),
+    });
+  };
+
+  const ejecutarEliminarDocumento = async (docId) => {
+    try {
+      setEliminandoItem(true);
+      const res = await fetch(`${API_BASE}/documents/${docId}/`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok && res.status !== 204) {
+        throw new Error('Error al eliminar el documento.');
+      }
+
+      setCuadernoActivo((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          documents: (prev.documents || []).filter((d) => d.id !== docId),
+        };
+      });
+
+      setNotebooks((prev) =>
+        prev.map((c) => {
+          if (cuadernoActivo && c.id === cuadernoActivo.id) {
+            return {
+              ...c,
+              documents: (c.documents || []).filter((d) => d.id !== docId),
+            };
+          }
+          return c;
+        })
+      );
+      setModalConfirmacion(null);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setEliminandoItem(false);
     }
   };
 
@@ -190,12 +327,12 @@ export default function Home() {
       {/* 2. ÁREA CENTRAL */}
       <main className="obsidian-stage-container">
         <section className="obsidian-canvas">
-          {cargando ? (
+          {cargando && !cuadernoActivo ? (
             <div className="canvas-state-msg">
               <span className="subtle-spinner" />
               <p>Consultando catálogo...</p>
             </div>
-          ) : error ? (
+          ) : error && !cuadernoActivo ? (
             <div className="canvas-state-msg">
               <p>Error de conexión: {error}</p>
             </div>
@@ -204,8 +341,14 @@ export default function Home() {
             <div className="folder-detail-view">
               <header className="folder-detail-header">
                 <div>
-                  <button className="btn-return-link" onClick={() => setCuadernoActivo(null)}>
-                    ← Volver a Cuadernos
+                  <button
+                    type="button"
+                    className="btn-nav-return"
+                    onClick={volverAListaCuadernos}
+                    title="Volver a Cuadernos"
+                  >
+                    <ChevronLeftIcon size={14} className="btn-return-chevron" />
+                    <span>Volver a Cuadernos</span>
                   </button>
                   <h1 className="folder-detail-title">{cuadernoActivo.name}</h1>
                   <span className="folder-detail-badge">
@@ -213,9 +356,24 @@ export default function Home() {
                   </span>
                 </div>
 
-                <button className="btn-subtle-action" onClick={abrirSelectorArchivo}>
-                  + Subir Documento
-                </button>
+                <div className="folder-header-actions">
+                  <button
+                    type="button"
+                    className="btn-danger-action"
+                    onClick={() => solicitarEliminarCuaderno(cuadernoActivo.id, cuadernoActivo.name)}
+                    title="Eliminar cuaderno"
+                  >
+                    <TrashIcon size={14} />
+                    <span>Eliminar Cuaderno</span>
+                  </button>
+                  <button
+                    className="btn-subtle-action"
+                    onClick={abrirSelectorArchivo}
+                    disabled={subiendoDoc}
+                  >
+                    {subiendoDoc ? 'Subiendo...' : '+ Subir Documento'}
+                  </button>
+                </div>
               </header>
 
               <div className="docs-grid-shelf">
@@ -228,10 +386,24 @@ export default function Home() {
                     <article
                       key={doc.id}
                       className="doc-shelf-card"
-                      onClick={() => abrirChatDocumento(doc)}
+                      onClick={() => abrirChatDocumento(doc, cuadernoActivo)}
                     >
                       <div className="doc-shelf-top">
-                        <span className="doc-status-badge">{doc.status || 'PDF'}</span>
+                        <span className={`doc-status-badge ${(doc.status || 'pending').toLowerCase()}`}>
+                          {doc.status || 'PENDING'}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-card-delete"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            solicitarEliminarDocumento(doc.id, doc.title);
+                          }}
+                          title="Eliminar documento"
+                          aria-label={`Eliminar documento ${doc.title}`}
+                        >
+                          <TrashIcon size={14} />
+                        </button>
                       </div>
                       <h3 className="doc-shelf-title">{doc.title}</h3>
                       <span className="doc-shelf-date">
@@ -256,12 +428,27 @@ export default function Home() {
                 <div
                   key={cuaderno.id}
                   className="notebook-shelf-card"
-                  onClick={() => setCuadernoActivo(cuaderno)}
+                  onClick={() => {
+                    navigate('/', { replace: true, state: { notebookId: cuaderno.id, notebook: cuaderno } });
+                    setCuadernoActivo(cuaderno);
+                  }}
                 >
                   <div className="card-top-row">
                     <span className="doc-counter-tag">
                       {cuaderno.documents?.length || 0} doc{cuaderno.documents?.length === 1 ? '' : 's'}
                     </span>
+                    <button
+                      type="button"
+                      className="btn-card-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        solicitarEliminarCuaderno(cuaderno.id, cuaderno.name);
+                      }}
+                      title="Eliminar cuaderno"
+                      aria-label={`Eliminar cuaderno ${cuaderno.name}`}
+                    >
+                      <TrashIcon size={14} />
+                    </button>
                   </div>
                   <div className="card-middle-row">
                     <h2 className="notebook-title-heading">{cuaderno.name}</h2>
@@ -317,6 +504,16 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* 4. MODAL IN-APP DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      <ConfirmModal
+        isOpen={!!modalConfirmacion}
+        title={modalConfirmacion?.titulo}
+        message={modalConfirmacion?.mensaje}
+        loading={eliminandoItem}
+        onClose={() => setModalConfirmacion(null)}
+        onConfirm={() => modalConfirmacion?.accion?.()}
+      />
     </div>
   );
 }

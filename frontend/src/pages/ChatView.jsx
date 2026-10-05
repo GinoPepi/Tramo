@@ -2,77 +2,37 @@ import React, { useState, useEffect, useRef } from 'react';
 import './ChatView.css';
 import ChatSidebar from '../components/ChatSidebar';
 import { useLocation, useNavigate } from 'react-router-dom';
+import ConfirmModal from '../components/ConfirmModal';
+import { TrashIcon, ChevronLeftIcon } from '../components/Icons';
 
 // Función para conectar con la API de Django
-const obtenerPrimerTramoDeApi = async (programa, pdfFile) => {
+// Función para iniciar la sesión y obtener los tramos desde el backend
+const iniciarSesionEnBackend = async (documentId, programa) => {
+  if (!documentId) {
+    alert('No se detectó el ID del documento. Por favor volvé a la pantalla de Cuadernos y abrí el documento.');
+    return [];
+  }
+
   try {
-    const formData = new FormData();
-
-    if (programa) {
-      formData.append('message', programa);
-    }
-
-    if (pdfFile) {
-      formData.append('file', pdfFile);
-    }
-
-    const response = await fetch('http://localhost:8000/chat/messages/', {
+    const response = await fetch(`http://localhost:8000/chat/documents/${documentId}/start-session/`, {
       method: 'POST',
-      body: formData,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ programa }),
     });
 
     if (!response.ok) {
-      throw new Error('Error al llamar a la API');
+      const errorMsg = await response.text();
+      throw new Error(`Servidor respondió con código ${response.status}: ${errorMsg}`);
     }
 
-    const data = await response.json();
-    const tituloApi = data.llm_response;
-
-    return [
-      {
-        id: 1,
-        titulo: tituloApi,
-        paginas: 'Páginas 1 a 5',
-        foco: 'Identificar la hipótesis de partida y el concepto principal.',
-        preguntas: [
-          '¿Cuál es la tesis central que plantea el autor en este tramo?',
-          '¿Cómo se vincula esta definición con el eje de la materia?',
-        ],
-      },
-      {
-        id: 2,
-        titulo: 'Marco Teórico y Definiciones',
-        paginas: 'Páginas 1 a 5',
-        foco: 'Identificar la hipótesis de partida y el concepto principal.',
-        preguntas: [
-          '¿Cuál es la tesis central que plantea el autor en este tramo?',
-          '¿Cómo se vincula esta definición con el eje de la materia?',
-        ],
-      },
-      {
-        id: 3,
-        titulo: 'Desarrollo y Casos de Estudio',
-        paginas: 'Páginas 6 a 12',
-        foco: 'Prestar atención a los límites metodológicos que señala el texto.',
-        preguntas: [
-          '¿Qué evidencia o ejemplo utiliza para respaldar su postura?',
-          '¿Qué contradicciones señala frente a autores previos?',
-        ],
-      },
-      {
-        id: 4,
-        titulo: 'Conclusiones y Cierre',
-        paginas: 'Páginas 13 a 18',
-        foco: 'Sintetizar las ideas para responder preguntas de examen.',
-        preguntas: [
-          '¿A qué síntesis arriba el autor?',
-          'En una frase: ¿cuál es el aporte clave que debés recordar?',
-        ],
-      },
-    ];
+    // The backend directly returns the list of tramos!
+    const tramosData = await response.json();
+    return tramosData;
   } catch (error) {
     console.error('Error al conectar con la API:', error);
-    alert('Hubo un error al obtener los datos de la API.');
+    alert(error.message);
     return [];
   }
 };
@@ -81,57 +41,94 @@ export default function ChatView() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Documento recibido desde Home.jsx
+  // Documento y cuaderno recibidos desde Home.jsx
   const documentoEntrante = location.state?.document;
+  const cuadernoEntrante = location.state?.notebook;
+  const notebookId = location.state?.notebookId || documentoEntrante?.notebook || cuadernoEntrante?.id;
+
+  const [documentoActual, setDocumentoActual] = useState(documentoEntrante || null);
+  const [cuadernoActual, setCuadernoActual] = useState(cuadernoEntrante || null);
 
   const [pdfUrl, setPdfUrl] = useState(null);
   const [nombreArchivo, setNombreArchivo] = useState('');
   const [programa, setPrograma] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
 
+  // Verificar si el documento ya cuenta con tramos procesados
+  const tramosIniciales =
+    documentoEntrante?.tramos && Array.isArray(documentoEntrante.tramos) && documentoEntrante.tramos.length > 0
+      ? documentoEntrante.tramos
+      : [];
+  const tieneTramosIniciales = tramosIniciales.length > 0;
+
   // Estados de sesión: 'setup' | 'loading' | 'reading' | 'chat' | 'summary'
-  const [paso, setPaso] = useState('setup');
+  const [paso, setPaso] = useState(tieneTramosIniciales ? 'reading' : 'setup');
   const [sidebarAbierta, setSidebarAbierta] = useState(true);
 
-  const [tramos, setTramos] = useState([]);
+  const [tramos, setTramos] = useState(tramosIniciales);
   const [tramoIdx, setTramoIdx] = useState(0);
   const [apuntes, setApuntes] = useState({});
   const [copiado, setCopiado] = useState(false);
+
+  // Estados para modal in-app de confirmación de eliminación
+  const [modalEliminarAbierto, setModalEliminarAbierto] = useState(false);
+  const [eliminandoDoc, setEliminandoDoc] = useState(false);
 
   const fileInputRef = useRef(null);
 
   // 1. CARGA AUTOMÁTICA SI VIENE DESDE HOME
   useEffect(() => {
-    if (documentoEntrante && documentoEntrante.file) {
-      setNombreArchivo(documentoEntrante.title || 'Documento sin título');
-
-      let filePath = documentoEntrante.file;
-      if (!filePath.startsWith('http')) {
-        const cleanPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
-        filePath = `http://localhost:8000${cleanPath}`;
+    if (documentoEntrante) {
+      // Si el documento ya tiene tramos listos, saltar directamente a 'reading' (Lectura Activa)
+      if (Array.isArray(documentoEntrante.tramos) && documentoEntrante.tramos.length > 0) {
+        setTramos(documentoEntrante.tramos);
+        setTramoIdx(0);
+        setPaso('reading');
+      } else if (documentoEntrante.id) {
+        // En caso de que no vinieran en location.state, consultar al backend si ya están listos
+        fetch(`http://localhost:8000/chat/documents/${documentoEntrante.id}/`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((docData) => {
+            if (docData && Array.isArray(docData.tramos) && docData.tramos.length > 0) {
+              setTramos(docData.tramos);
+              setTramoIdx(0);
+              setPaso('reading');
+            }
+          })
+          .catch((err) => console.error('Error al consultar tramos del documento:', err));
       }
 
-      // Descargar el archivo y crear un Blob local para el visor (evita X-Frame-Options)
-      fetch(filePath)
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(`Error ${res.status}: no se encontró en ${filePath}`);
-          }
-          return res.blob();
-        })
-        .then((blob) => {
-          const file = new File([blob], `${documentoEntrante.title || 'documento'}.pdf`, {
-            type: 'application/pdf',
-          });
-          setPdfFile(file);
+      if (documentoEntrante.file) {
+        setNombreArchivo(documentoEntrante.title || 'Documento sin título');
 
-          const localBlobUrl = URL.createObjectURL(blob);
-          setPdfUrl(localBlobUrl);
-        })
-        .catch((err) => {
-          console.error('Error al cargar el PDF:', err);
-          alert(`No se pudo cargar el archivo: ${err.message}`);
-        });
+        let filePath = documentoEntrante.file;
+        if (!filePath.startsWith('http')) {
+          const cleanPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
+          filePath = `http://localhost:8000${cleanPath}`;
+        }
+
+        // Descargar el archivo y crear un Blob local para el visor (evita X-Frame-Options)
+        fetch(filePath)
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error(`Error ${res.status}: no se encontró en ${filePath}`);
+            }
+            return res.blob();
+          })
+          .then((blob) => {
+            const file = new File([blob], `${documentoEntrante.title || 'documento'}.pdf`, {
+              type: 'application/pdf',
+            });
+            setPdfFile(file);
+
+            const localBlobUrl = URL.createObjectURL(blob);
+            setPdfUrl(localBlobUrl);
+          })
+          .catch((err) => {
+            console.error('Error al cargar el PDF:', err);
+            alert(`No se pudo cargar el archivo: ${err.message}`);
+          });
+      }
     }
   }, [documentoEntrante]);
 
@@ -172,23 +169,40 @@ export default function ChatView() {
       alert('Debés cargar un PDF para comenzar.');
       return;
     }
-
     setPaso('loading');
-
     try {
-      const data = await obtenerPrimerTramoDeApi(programa, pdfFile);
-
+      // Pass the document ID and the study topics text:
+      const docId = documentoActual?.id || documentoEntrante?.id;
+      const data = await iniciarSesionEnBackend(docId, programa);
       if (data && data.length > 0) {
-        setTramos(data);
-        setTramoIdx(0);
-        setPaso('reading');
+        setTramos(data);            // <-- Receives the array of tramos from Django!
+        setTramoIdx(0);             // <-- Starts at Tramo 1 (index 0)
+        setPaso('reading');         // <-- Transitions directly to the reading view
         setSidebarAbierta(true);
+
+        const docActualizado = {
+          ...(documentoActual || documentoEntrante),
+          status: 'COMPLETED',
+          tramos: data,
+        };
+        setDocumentoActual(docActualizado);
+
+        const currentNotebook = cuadernoActual || cuadernoEntrante;
+        if (currentNotebook) {
+          const cuadernoActualizado = {
+            ...currentNotebook,
+            documents: (currentNotebook.documents || []).map((d) =>
+              d.id === docActualizado.id ? docActualizado : d
+            ),
+          };
+          setCuadernoActual(cuadernoActualizado);
+        }
       } else {
         setPaso('setup');
       }
     } catch (error) {
       console.error('Error en la sesión:', error);
-      alert('No se pudo conectar con el servidor de Django. Verificá que esté encendido.');
+      alert('No se pudo conectar con el servidor.');
       setPaso('setup');
     }
   };
@@ -213,6 +227,74 @@ export default function ChatView() {
     setTimeout(() => setCopiado(false), 2000);
   };
 
+  const handleVolverACuaderno = () => {
+    const targetNotebook = cuadernoActual || cuadernoEntrante;
+    const currentDoc = documentoActual || documentoEntrante;
+
+    const updatedNotebook = targetNotebook
+      ? {
+          ...targetNotebook,
+          documents: (targetNotebook.documents || []).map((d) =>
+            d.id === currentDoc?.id
+              ? {
+                  ...d,
+                  status: (tramos && tramos.length > 0) ? 'COMPLETED' : d.status,
+                  tramos: (tramos && tramos.length > 0) ? tramos : d.tramos,
+                }
+              : d
+          ),
+        }
+      : null;
+
+    if (notebookId || targetNotebook) {
+      navigate('/', {
+        state: {
+          notebookId: notebookId || targetNotebook?.id,
+          notebook: updatedNotebook,
+        },
+      });
+    } else {
+      navigate('/');
+    }
+  };
+
+  const ejecutarEliminarDocumento = async () => {
+    const docId = documentoActual?.id || documentoEntrante?.id;
+    if (!docId) return;
+
+    try {
+      setEliminandoDoc(true);
+      const res = await fetch(`http://localhost:8000/chat/documents/${docId}/`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok && res.status !== 204) {
+        throw new Error('Error al eliminar el documento.');
+      }
+
+      setModalEliminarAbierto(false);
+
+      const targetNotebook = cuadernoActual || cuadernoEntrante;
+      const updatedNotebook = targetNotebook
+        ? {
+            ...targetNotebook,
+            documents: (targetNotebook.documents || []).filter((d) => d.id !== docId),
+          }
+        : null;
+
+      navigate('/', {
+        state: {
+          notebookId: notebookId || targetNotebook?.id,
+          notebook: updatedNotebook,
+        },
+      });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setEliminandoDoc(false);
+    }
+  };
+
   return (
     <div className="obsidian-chat-workspace">
       {/* 1. VISOR PRINCIPAL */}
@@ -223,16 +305,31 @@ export default function ChatView() {
             <button
               type="button"
               className="btn-back-shelf"
-              onClick={() => navigate('/')}
-              title="Volver a los cuadernos"
+              onClick={handleVolverACuaderno}
+              title={cuadernoActual?.name || cuadernoEntrante?.name ? `Volver a ${cuadernoActual?.name || cuadernoEntrante?.name}` : "Volver a Cuadernos"}
             >
-              ← Cuadernos
+              <ChevronLeftIcon size={14} className="btn-return-chevron" />
+              <span className="btn-back-shelf-label">
+                {cuadernoActual?.name || cuadernoEntrante?.name || 'Cuadernos'}
+              </span>
             </button>
             {nombreArchivo && (
               <span className="doc-pill-indicator" title={nombreArchivo}>
                 <span className="dot-active-pulse" />
                 {nombreArchivo}
               </span>
+            )}
+            {(documentoActual?.id || documentoEntrante?.id) && (
+              <button
+                type="button"
+                className="btn-delete-document-top"
+                onClick={() => setModalEliminarAbierto(true)}
+                title="Eliminar este documento"
+                aria-label="Eliminar este documento"
+              >
+                <TrashIcon size={13} />
+                <span>Eliminar</span>
+              </button>
             )}
           </div>
 
@@ -269,9 +366,10 @@ export default function ChatView() {
                 <button
                   type="button"
                   className="btn-empty-return"
-                  onClick={() => navigate('/')}
+                  onClick={handleVolverACuaderno}
                 >
-                  ← Volver a Cuadernos
+                  <ChevronLeftIcon size={14} className="btn-return-chevron" />
+                  <span>{cuadernoEntrante?.name ? `Volver a ${cuadernoEntrante.name}` : "Volver a Cuadernos"}</span>
                 </button>
               </div>
             </div>
@@ -487,6 +585,16 @@ export default function ChatView() {
           </div>
         )}
       </aside>
+
+      {/* MODAL IN-APP DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      <ConfirmModal
+        isOpen={modalEliminarAbierto}
+        title="¿Eliminar documento?"
+        message={`¿Estás seguro de que querés eliminar el documento "${nombreArchivo || 'actual'}"? Esta acción no se puede deshacer.`}
+        loading={eliminandoDoc}
+        onClose={() => setModalEliminarAbierto(false)}
+        onConfirm={ejecutarEliminarDocumento}
+      />
     </div>
   );
 }

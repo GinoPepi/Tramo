@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+function formatMessageText(text) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 export default function ChatSidebar({
   tramo,
   tramoIdx,
@@ -14,6 +25,7 @@ export default function ChatSidebar({
   const [escribiendoIA, setEscribiendoIA] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   // Auto-scroll al final con cada mensaje nuevo
   const scrollToBottom = () => {
@@ -41,8 +53,15 @@ export default function ChatSidebar({
     ]);
   }, [tramo, tramoIdx]);
 
+  // Autofoco al textarea cuando no esté deshabilitado
+  useEffect(() => {
+    if (!chatCompletado && !escribiendoIA) {
+      textareaRef.current?.focus();
+    }
+  }, [chatCompletado, escribiendoIA, indicePregunta]);
+
   const handleEnviar = (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const texto = inputMensaje.trim();
     if (!texto || escribiendoIA || chatCompletado) return;
 
@@ -61,7 +80,7 @@ export default function ChatSidebar({
       onGuardarApunte(tramo.id, indicePregunta, texto);
     }
 
-    // 3. Respuesta de la IA (Simulación lista para reemplazar con fetch)
+    // 3. Respuesta de la IA
     const siguientePreguntaIdx = indicePregunta + 1;
     setEscribiendoIA(true);
 
@@ -96,22 +115,29 @@ export default function ChatSidebar({
     <div className="chat-layout">
       {/* Subcabecera con contexto del tramo */}
       <div className="chat-subheader">
-        <span className="step-badge warning">Active Recall</span>
-        <small>Tramo {tramoIdx + 1} de {totalTramos}</small>
+        <div className="chat-subheader-left">
+          <span className="step-badge warning">Active Recall</span>
+          <span className="chat-subheader-subtitle">Pausa de fijación</span>
+        </div>
+        <span className="chat-subheader-progress">
+          Tramo {tramoIdx + 1} de {totalTramos}
+        </span>
       </div>
 
       {/* Historial de la conversación */}
       <div className="chat-messages-container">
         {mensajes.map((m) => (
           <div key={m.id} className={`chat-message-row ${m.emisor}`}>
-            <div className="chat-bubble">{m.texto}</div>
+            <div className="chat-bubble">{formatMessageText(m.texto)}</div>
           </div>
         ))}
 
         {escribiendoIA && (
           <div className="chat-message-row ia">
             <div className="chat-bubble typing">
-              <span>.</span><span>.</span><span>.</span>
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
             </div>
           </div>
         )}
@@ -119,10 +145,17 @@ export default function ChatSidebar({
         {/* Botón para continuar cuando termina la ronda */}
         {chatCompletado && (
           <div className="chat-advance-card">
+            <div className="advance-card-text">
+              <span className="advance-card-icon">✓</span>
+              <div>
+                <h4>¡Ronda de fijación completada!</h4>
+                <p>Tus apuntes se guardaron en la memoria de la sesión.</p>
+              </div>
+            </div>
             <button
               type="button"
               onClick={onAvanzar}
-              className="btn-primary"
+              className="btn-advance-action"
             >
               {tramoIdx + 1 < totalTramos ? 'Avanzar al siguiente tramo →' : 'Ver resumen completo →'}
             </button>
@@ -132,24 +165,41 @@ export default function ChatSidebar({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Barra de entrada */}
+      {/* Barra de entrada con Textarea */}
       <form onSubmit={handleEnviar} className="chat-input-bar">
-        <input
-          type="text"
-          placeholder={chatCompletado ? 'Ronda completada.' : 'Escribí tu síntesis...'}
-          value={inputMensaje}
-          disabled={chatCompletado || escribiendoIA}
-          onChange={(e) => setInputMensaje(e.target.value)}
-          autoFocus
-        />
-        <button
-          type="submit"
-          className="btn-chat-send"
-          disabled={!inputMensaje.trim() || chatCompletado || escribiendoIA}
-          title="Enviar respuesta"
-        >
-          ↑
-        </button>
+        <div className="chat-input-wrapper">
+          <textarea
+            ref={textareaRef}
+            rows="2"
+            placeholder={
+              chatCompletado
+                ? 'Ronda completada. Podés avanzar al siguiente tramo.'
+                : 'Escribí tu síntesis o respuesta... (Enter para enviar)'
+            }
+            value={inputMensaje}
+            disabled={chatCompletado || escribiendoIA}
+            onChange={(e) => setInputMensaje(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleEnviar(e);
+              }
+            }}
+            className="chat-textarea"
+          />
+          <button
+            type="submit"
+            className="btn-chat-send"
+            disabled={!inputMensaje.trim() || chatCompletado || escribiendoIA}
+            title="Enviar respuesta (Enter)"
+            aria-label="Enviar respuesta"
+          >
+            ↑
+          </button>
+        </div>
+        <span className="chat-input-hint">
+          {chatCompletado ? 'Ronda finalizada' : 'Enter para enviar · Shift+Enter para salto de línea'}
+        </span>
       </form>
     </div>
   );
