@@ -4,21 +4,27 @@ import ChatSidebar from '../components/ChatSidebar';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import { TrashIcon, ChevronLeftIcon } from '../components/Icons';
+import { useAuth } from '../context/AuthContext';
 
 // Función para conectar con la API de Django
 // Función para iniciar la sesión y obtener los tramos desde el backend
-const iniciarSesionEnBackend = async (documentId, programa) => {
+const iniciarSesionEnBackend = async (documentId, programa, token) => {
   if (!documentId) {
     alert('No se detectó el ID del documento. Por favor volvé a la pantalla de Cuadernos y abrí el documento.');
     return [];
   }
 
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Token ${token}`;
+    }
+
     const response = await fetch(`http://localhost:8000/chat/documents/${documentId}/start-session/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ programa }),
     });
 
@@ -38,6 +44,7 @@ const iniciarSesionEnBackend = async (documentId, programa) => {
 };
 
 export default function ChatView() {
+  const { token } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -86,7 +93,10 @@ export default function ChatView() {
         setPaso('reading');
       } else if (documentoEntrante.id) {
         // En caso de que no vinieran en location.state, consultar al backend si ya están listos
-        fetch(`http://localhost:8000/chat/documents/${documentoEntrante.id}/`)
+        const headers = {};
+        if (token) headers['Authorization'] = `Token ${token}`;
+
+        fetch(`http://localhost:8000/chat/documents/${documentoEntrante.id}/`, { headers })
           .then((res) => (res.ok ? res.json() : null))
           .then((docData) => {
             if (docData && Array.isArray(docData.tramos) && docData.tramos.length > 0) {
@@ -171,9 +181,9 @@ export default function ChatView() {
     }
     setPaso('loading');
     try {
-      // Pass the document ID and the study topics text:
+      // Pass the document ID, study topics text, and auth token:
       const docId = documentoActual?.id || documentoEntrante?.id;
-      const data = await iniciarSesionEnBackend(docId, programa);
+      const data = await iniciarSesionEnBackend(docId, programa, token);
       if (data && data.length > 0) {
         setTramos(data);            // <-- Receives the array of tramos from Django!
         setTramoIdx(0);             // <-- Starts at Tramo 1 (index 0)
@@ -264,8 +274,12 @@ export default function ChatView() {
 
     try {
       setEliminandoDoc(true);
+      const headers = {};
+      if (token) headers['Authorization'] = `Token ${token}`;
+
       const res = await fetch(`http://localhost:8000/chat/documents/${docId}/`, {
         method: 'DELETE',
+        headers,
       });
 
       if (!res.ok && res.status !== 204) {

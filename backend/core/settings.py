@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'chat',
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
 ]
 
@@ -134,12 +135,17 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}
 '''
 WHEN IN PRODUCTION UNCOMMENT THESE LINES TO HIDE THE DJANGO REST FRAMEWORK API RENDERER
 
-REST_FRAMEWORK = {
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
-    ]
-}
+REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'] = [
+    'rest_framework.renderers.JSONRenderer',
+]
 '''

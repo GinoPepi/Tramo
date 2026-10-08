@@ -3,10 +3,12 @@ import './Home.css';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import { TrashIcon, ChevronLeftIcon } from '../components/Icons';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE = 'http://localhost:8000/chat';
 
 export default function Home() {
+  const { user, token, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -30,10 +32,10 @@ export default function Home() {
   const fileInputRef = useRef(null);
   const inputNombreRef = useRef(null);
 
-  const usuario = {
-    nombre: 'Gino',
-    email: 'usuario@ejemplo.com',
-  };
+  // Datos reales del usuario autenticado
+  const nombreUsuario = user?.first_name || user?.username || 'Usuario';
+  const inicialUsuario = (user?.first_name || user?.username || 'U').charAt(0).toUpperCase();
+  const emailUsuario = user?.email || (user?.username ? `${user.username}@tramo.app` : 'usuario@tramo.app');
 
   const abrirChatDocumento = (doc, cuaderno = cuadernoActivo) => {
     const freshCuaderno = notebooks.find((n) => n.id === (cuaderno?.id || doc?.notebook)) || cuaderno;
@@ -55,10 +57,16 @@ export default function Home() {
 
   // 1. GET: Cargar cuadernos
   const cargarCuadernos = async () => {
+    if (!token) return;
     try {
       setCargando(true);
       setError(null);
-      const res = await fetch(`${API_BASE}/notebooks/`);
+      const res = await fetch(`${API_BASE}/notebooks/`, {
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
       if (!res.ok) throw new Error('No se pudo conectar con el catálogo de cuadernos.');
       const data = await res.json();
       setNotebooks(data);
@@ -78,8 +86,10 @@ export default function Home() {
   };
 
   useEffect(() => {
-    cargarCuadernos();
-  }, []);
+    if (token) {
+      cargarCuadernos();
+    }
+  }, [token]);
 
   // Sincronizar cuadernoActivo si location.state cambia o al cargar notebooks frescos
   useEffect(() => {
@@ -129,7 +139,10 @@ export default function Home() {
       setGuardando(true);
       const res = await fetch(`${API_BASE}/notebooks/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`,
+        },
         body: JSON.stringify({ name: nombreLimpio }),
       });
 
@@ -163,6 +176,9 @@ export default function Home() {
       setSubiendoDoc(true);
       const res = await fetch(`${API_BASE}/documents/`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+        },
         body: formData,
       });
 
@@ -211,6 +227,9 @@ export default function Home() {
       setEliminandoItem(true);
       const res = await fetch(`${API_BASE}/notebooks/${cuadernoId}/`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Token ${token}`,
+        },
       });
 
       if (!res.ok && res.status !== 204) {
@@ -246,6 +265,9 @@ export default function Home() {
       setEliminandoItem(true);
       const res = await fetch(`${API_BASE}/documents/${docId}/`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Token ${token}`,
+        },
       });
 
       if (!res.ok && res.status !== 204) {
@@ -297,7 +319,7 @@ export default function Home() {
           aria-label="Menú de perfil"
         >
           <span className="user-initial">
-            {usuario.nombre ? usuario.nombre.charAt(0).toUpperCase() : 'U'}
+            {inicialUsuario}
           </span>
           <span className="user-status-dot" />
         </button>
@@ -306,17 +328,19 @@ export default function Home() {
           <div className="user-popover-card">
             <div className="popover-meta">
               <span className="meta-tag">SESIÓN ACTIVA</span>
-              <span className="meta-name">{usuario.nombre}</span>
-              <span className="meta-email">{usuario.email}</span>
+              <span className="meta-name">{nombreUsuario}</span>
+              <span className="meta-email">{emailUsuario}</span>
             </div>
 
             <div className="popover-divider" />
 
             <nav className="popover-actions">
-              <button onClick={() => alert('Mi perfil')}>Mi Perfil</button>
+              <button onClick={() => alert(`Perfil: ${nombreUsuario} (@${user?.username || 'usuario'})`)}>
+                Mi Perfil
+              </button>
               <button onClick={() => alert('Configurar')}>Configurar cuenta</button>
               <div className="popover-divider" />
-              <button className="btn-logout" onClick={() => alert('Cerrar sesión')}>
+              <button className="btn-logout" onClick={logout}>
                 Cerrar Sesión
               </button>
             </nav>

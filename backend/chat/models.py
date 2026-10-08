@@ -1,7 +1,15 @@
 from django.db import models
 from pathlib import Path
+from django.conf import settings
 
 class Notebook(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notebooks',
+        null=True,
+        blank=True
+    )
     name = models.CharField(max_length=150)
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
