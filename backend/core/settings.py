@@ -142,6 +142,9 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
 }
+
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', 'TU_GOOGLE_CLIENT_ID.apps.googleusercontent.com')
+
 '''
 WHEN IN PRODUCTION UNCOMMENT THESE LINES TO HIDE THE DJANGO REST FRAMEWORK API RENDERER
 

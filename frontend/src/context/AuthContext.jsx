@@ -78,6 +78,60 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const register = async ({ username, email, first_name, password }) => {
+    const response = await fetch(`${API_AUTH_URL}/register/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, email, first_name, password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      let errorMsg = 'Error en el registro.';
+      if (typeof data === 'object') {
+        const firstKey = Object.keys(data)[0];
+        if (Array.isArray(data[firstKey])) {
+          errorMsg = data[firstKey][0];
+        } else if (typeof data[firstKey] === 'string') {
+          errorMsg = data[firstKey];
+        }
+      }
+      throw new Error(errorMsg);
+    }
+
+    localStorage.setItem('tramo_token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setIsAuthenticated(true);
+    return data;
+  };
+
+  const loginWithGoogle = async (credential) => {
+    const response = await fetch(`${API_AUTH_URL}/google/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ credential }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      const errorMsg = data.detail || data.error || 'Error al autenticar con Google.';
+      throw new Error(errorMsg);
+    }
+
+    localStorage.setItem('tramo_token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setIsAuthenticated(true);
+    return data;
+  };
+
   const logout = async () => {
     const currentToken = token || localStorage.getItem('tramo_token');
     if (currentToken) {
@@ -108,6 +162,8 @@ export function AuthProvider({ children }) {
         isAuthenticated,
         cargandoAuth,
         login,
+        register,
+        loginWithGoogle,
         logout,
       }}
     >

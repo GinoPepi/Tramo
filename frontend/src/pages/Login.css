@@ -1,3 +1,7 @@
+/* ==========================================================================
+   TRAMO — Obsidian Tech Auth Screen (Login & Register shared styles)
+   Paleta: #0c0d12 (fondo), #131620 (tarjeta), #232938 (borde), #93c5fd (acento)
+   ========================================================================== */
 
 .login-stage-container {
   display: flex;
@@ -12,20 +16,20 @@
 
 .login-card {
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   background-color: #131620;
   border: 1px solid #232938;
   border-radius: 16px;
-  padding: 40px 36px;
+  padding: 38px 34px;
   box-sizing: border-box;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .login-badge {
@@ -41,12 +45,12 @@
   color: #93c5fd;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .login-title {
-  margin: 0 0 8px 0;
-  font-size: 26px;
+  margin: 0 0 6px 0;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.03em;
   color: #f1f5f9;
@@ -59,16 +63,64 @@
   line-height: 1.5;
 }
 
+/* Contenedor del botón oficial de Google */
+.google-oauth-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.google-btn-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+/* Separador sobrio */
+.auth-separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  margin: 10px 0 18px 0;
+}
+
+.auth-separator::before,
+.auth-separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #232938;
+}
+
+.auth-separator span {
+  padding: 0 12px;
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
+}
+
+.login-fields-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
 .login-field-group {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   text-align: left;
 }
 
@@ -85,8 +137,8 @@
   background-color: #0f1118;
   border: 1px solid #232938;
   border-radius: 8px;
-  padding: 12px 14px;
-  font-size: 14px;
+  padding: 11px 13px;
+  font-size: 13.5px;
   color: #f8fafc;
   outline: none;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
@@ -118,6 +170,7 @@
   font-size: 13px;
   line-height: 1.4;
   animation: fadeIn 0.2s ease-out;
+  margin-bottom: 4px;
 }
 
 .login-error-icon {
@@ -142,7 +195,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.18s ease, transform 0.05s ease;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .login-btn-submit:hover:not(:disabled) {
@@ -168,14 +221,35 @@
 }
 
 .login-footer {
-  margin-top: 26px;
+  margin-top: 22px;
   text-align: center;
   border-top: 1px solid rgba(35, 41, 56, 0.6);
-  padding-top: 18px;
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-switch-text {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.auth-link {
+  color: #93c5fd;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.auth-link:hover {
+  color: #bfdbfe;
+  text-decoration: underline;
 }
 
 .login-hint {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #64748b;
   margin: 0;
 }

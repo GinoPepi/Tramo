@@ -2,19 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../context/AuthContext';
-import './Login.css';
+import './Register.css';
 
-export default function Login() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+export default function Register() {
+  const [formData, setFormData] = useState({
+    first_name: '',
+    username: '',
+    email: '',
+    password: '',
+  });
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState(null);
 
-  const { login, loginWithGoogle, isAuthenticated } = useAuth();
+  const { register, loginWithGoogle, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Si ya tiene sesión activa, redirigir a la página previa o a la raíz
+  // Si ya tiene sesión activa, redirigir a la página principal
   useEffect(() => {
     if (isAuthenticated) {
       const destino = location.state?.from?.pathname || '/';
@@ -22,19 +26,39 @@ export default function Login() {
     }
   }, [isAuthenticated, navigate, location]);
 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username.trim() || !password || cargando) return;
+    const { first_name, username, email, password } = formData;
+
+    if (!username.trim() || !email.trim() || !password) {
+      setError('Por favor completá todos los campos requeridos.');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
 
     setError(null);
     setCargando(true);
 
     try {
-      await login(username.trim(), password);
+      await register({
+        first_name: first_name.trim(),
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
       const destino = location.state?.from?.pathname || '/';
       navigate(destino, { replace: true });
     } catch (err) {
-      setError(err.message || 'Error al iniciar sesión. Verifique sus credenciales.');
+      setError(err.message || 'Error al crear la cuenta. Verificá los datos ingresados.');
     } finally {
       setCargando(false);
     }
@@ -61,7 +85,7 @@ export default function Login() {
   };
 
   const handleGoogleError = () => {
-    setError('No se pudo completar el inicio de sesión con Google.');
+    setError('No se pudo completar el registro con Google.');
   };
 
   return (
@@ -71,9 +95,9 @@ export default function Login() {
           <div className="login-badge">
             <span>Tramo Workspace</span>
           </div>
-          <h1 className="login-title">Iniciar Sesión</h1>
+          <h1 className="login-title">Crear Cuenta</h1>
           <p className="login-subtitle">
-            Gestor documental y asistente de lectura académica
+            Unite a tu asistente de lectura y organizador de cuadernos
           </p>
         </header>
 
@@ -84,7 +108,7 @@ export default function Login() {
           </div>
         )}
 
-        {/* Botón de Google OAuth */}
+        {/* Registro con Google */}
         <div className="google-oauth-zone">
           <div className="google-btn-wrapper">
             <GoogleLogin
@@ -93,7 +117,7 @@ export default function Login() {
               theme="filled_black"
               shape="rectangular"
               size="large"
-              text="signin_with"
+              text="signup_with"
               width="100%"
             />
           </div>
@@ -104,66 +128,104 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
+          <div className="register-grid-names">
+            <div className="login-field-group">
+              <label htmlFor="first_name" className="login-label">
+                Nombre
+              </label>
+              <input
+                id="first_name"
+                name="first_name"
+                type="text"
+                className="login-input"
+                placeholder="Ej: Gino"
+                value={formData.first_name}
+                onChange={handleChange}
+                disabled={cargando}
+                autoFocus
+              />
+            </div>
+
+            <div className="login-field-group">
+              <label htmlFor="username" className="login-label">
+                Usuario *
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                className="login-input"
+                placeholder="Ej: ginop"
+                value={formData.username}
+                onChange={handleChange}
+                disabled={cargando}
+                required
+                autoComplete="username"
+              />
+            </div>
+          </div>
+
           <div className="login-field-group">
-            <label htmlFor="username" className="login-label">
-              Usuario
+            <label htmlFor="email" className="login-label">
+              Correo Electrónico *
             </label>
             <input
-              id="username"
-              type="text"
+              id="email"
+              name="email"
+              type="email"
               className="login-input"
-              placeholder="Ingresá tu usuario"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              placeholder="nombre@ejemplo.com"
+              value={formData.email}
+              onChange={handleChange}
               disabled={cargando}
-              autoFocus
               required
-              autoComplete="username"
+              autoComplete="email"
             />
           </div>
 
           <div className="login-field-group">
             <label htmlFor="password" className="login-label">
-              Contraseña
+              Contraseña *
             </label>
             <input
               id="password"
+              name="password"
               type="password"
               className="login-input"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 8 caracteres"
+              value={formData.password}
+              onChange={handleChange}
               disabled={cargando}
               required
-              autoComplete="current-password"
+              autoComplete="new-password"
             />
           </div>
 
           <button
             type="submit"
             className="login-btn-submit"
-            disabled={cargando || !username.trim() || !password}
+            disabled={cargando || !formData.username.trim() || !formData.email.trim() || !formData.password}
           >
             {cargando ? (
               <>
                 <span className="login-spinner" />
-                <span>Ingresando...</span>
+                <span>Registrando cuenta...</span>
               </>
             ) : (
-              'Ingresar al espacio'
+              'Crear mi cuenta'
             )}
           </button>
         </form>
 
         <footer className="login-footer">
           <p className="login-switch-text">
-            ¿No tenés una cuenta?{' '}
-            <Link to="/register" className="auth-link">
-              Registrate
+            ¿Ya tenés una cuenta?{' '}
+            <Link to="/login" className="auth-link">
+              Iniciar sesión
             </Link>
           </p>
           <p className="login-hint">
-            Acceso seguro mediante autenticación basada en tokens
+            Tus datos se encuentran resguardados con cifrado estándar
           </p>
         </footer>
       </div>
