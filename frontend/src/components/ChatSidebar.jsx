@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon, AlertTriangleIcon } from './Icons';
 
 function formatMessageText(text) {
   if (!text) return null;
@@ -15,8 +16,11 @@ export default function ChatSidebar({
   tramo,
   tramoIdx,
   totalTramos,
+  apuntes,
+  onVolverLectura,
   onGuardarApunte,
   onAvanzar,
+  onVolverResumen,
 }) {
   const [mensajes, setMensajes] = useState([]);
   const [inputMensaje, setInputMensaje] = useState('');
@@ -36,22 +40,75 @@ export default function ChatSidebar({
     scrollToBottom();
   }, [mensajes, escribiendoIA]);
 
-  // Al montar el componente o cambiar de tramo, inicializa con la primera pregunta
+  // Al montar el componente o cambiar de tramo, inicializa con las preguntas y respuestas existentes
   useEffect(() => {
-    if (!tramo) return;
+    if (!tramo || !Array.isArray(tramo.preguntas)) return;
 
-    setIndicePregunta(0);
-    setChatCompletado(false);
-    setInputMensaje('');
+    const apuntesTramo = apuntes?.[tramo.id] || {};
+    const msgs = [];
+    let siguienteIdx = 0;
 
-    setMensajes([
-      {
-        id: Date.now(),
+    tramo.preguntas.forEach((pregunta, idx) => {
+      const resp = apuntesTramo[idx];
+
+      if (idx === 0) {
+        msgs.push({
+          id: `init-${idx}`,
+          emisor: 'ia',
+          texto: `¡Terminaste el **Tramo ${tramoIdx + 1}**! Vamos con una pausa de fijación.\n\n${pregunta}`,
+        });
+      } else if (idx <= siguienteIdx) {
+        msgs.push({
+          id: `ia-${idx}`,
+          emisor: 'ia',
+          texto: `Anotado. Siguiente pregunta:\n\n${pregunta}`,
+        });
+      }
+
+      if (resp) {
+        msgs.push({
+          id: `user-${idx}`,
+          emisor: 'usuario',
+          texto: resp,
+        });
+        siguienteIdx = idx + 1;
+      }
+    });
+
+    const completado = siguienteIdx >= tramo.preguntas.length;
+
+    if (completado && tramo.preguntas.length > 0) {
+      msgs.push({
+        id: 'completed-msg',
         emisor: 'ia',
-        texto: `¡Terminaste el **Tramo ${tramoIdx + 1}**! Vamos con una pausa de fijación.\n\n${tramo.preguntas[0]}`,
-      },
-    ]);
+        texto: '¡Excelente síntesis! Guardé tus apuntes de este tramo. Podés avanzar cuando estés listo.',
+      });
+      setChatCompletado(true);
+      setIndicePregunta(tramo.preguntas.length - 1);
+    } else {
+      setChatCompletado(false);
+      setIndicePregunta(siguienteIdx);
+    }
+
+    setInputMensaje('');
+    setMensajes(msgs);
   }, [tramo, tramoIdx]);
+
+  const ajustarAlturaTextarea = (el) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      if (!inputMensaje) {
+        textareaRef.current.style.height = 'auto';
+      } else {
+        ajustarAlturaTextarea(textareaRef.current);
+      }
+    }
+  }, [inputMensaje]);
 
   // Autofoco al textarea cuando no esté deshabilitado
   useEffect(() => {
@@ -111,17 +168,57 @@ export default function ChatSidebar({
     }, 700);
   };
 
+  const handleReiniciarChat = () => {
+    if (!tramo || !Array.isArray(tramo.preguntas) || tramo.preguntas.length === 0) return;
+    setChatCompletado(false);
+    setIndicePregunta(0);
+    setMensajes([
+      {
+        id: `init-0`,
+        emisor: 'ia',
+        texto: `¡Terminaste el **Tramo ${tramoIdx + 1}**! Vamos con una pausa de fijación.\n\n${tramo.preguntas[0]}`,
+      },
+    ]);
+    setInputMensaje('');
+  };
+
   return (
     <div className="chat-layout">
-      {/* Subcabecera con contexto del tramo */}
+      {/* Subcabecera con navegación y contexto */}
       <div className="chat-subheader">
-        <div className="chat-subheader-left">
-          <span className="step-badge warning">Active Recall</span>
-          <span className="chat-subheader-subtitle">Pausa de fijación</span>
+        {onVolverLectura && (
+          <button
+            type="button"
+            onClick={onVolverLectura}
+            className="btn-chat-back"
+            title="Volver a la lectura de este tramo"
+            aria-label="Volver a la lectura"
+          >
+            <ChevronLeftIcon size={14} className="btn-return-chevron" />
+            <span>Volver a lectura</span>
+          </button>
+        )}
+
+        <div className="chat-subheader-status-group">
+          {onVolverResumen && (
+            <button
+              type="button"
+              onClick={onVolverResumen}
+              className="btn-chat-back"
+              title="Volver a las notas de la sesión"
+              aria-label="Volver a notas"
+            >
+              <span>Notas</span>
+              <ChevronRightIcon size={14} className="btn-return-chevron-right" />
+            </button>
+          )}
+          {!onVolverResumen && (
+            <div className="chat-subheader-status">
+              <span className="chat-status-pulse-dot" />
+              <span className="chat-subheader-subtitle">Pausa de fijación</span>
+            </div>
+          )}
         </div>
-        <span className="chat-subheader-progress">
-          Tramo {tramoIdx + 1} de {totalTramos}
-        </span>
       </div>
 
       {/* Historial de la conversación */}
@@ -146,19 +243,31 @@ export default function ChatSidebar({
         {chatCompletado && (
           <div className="chat-advance-card">
             <div className="advance-card-text">
-              <span className="advance-card-icon">✓</span>
+              <span className="advance-card-icon" aria-label="Aviso">
+                <AlertTriangleIcon size={16} />
+              </span>
               <div>
                 <h4>¡Ronda de fijación completada!</h4>
-                <p>Tus apuntes se guardaron en la memoria de la sesión.</p>
+                <p>Tus apuntes se guardaron</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onAvanzar}
-              className="btn-advance-action"
-            >
-              {tramoIdx + 1 < totalTramos ? 'Avanzar al siguiente tramo →' : 'Ver resumen completo →'}
-            </button>
+            <div className="chat-advance-buttons-group">
+              <button
+                type="button"
+                onClick={handleReiniciarChat}
+                className="btn-chat-reset"
+                title="Volver a responder las preguntas de este tramo"
+              >
+                Volver a responder
+              </button>
+              <button
+                type="button"
+                onClick={onAvanzar}
+                className="btn-advance-action"
+              >
+                {onVolverResumen ? 'Volver a notas de la sesión' : (tramoIdx + 1 < totalTramos ? 'Avanzar al siguiente tramo →' : 'Ver resumen completo →')}
+              </button>
+            </div>
           </div>
         )}
 
@@ -170,7 +279,7 @@ export default function ChatSidebar({
         <div className="chat-input-wrapper">
           <textarea
             ref={textareaRef}
-            rows="2"
+            rows="1"
             placeholder={
               chatCompletado
                 ? 'Ronda completada. Podés avanzar al siguiente tramo.'
@@ -178,7 +287,10 @@ export default function ChatSidebar({
             }
             value={inputMensaje}
             disabled={chatCompletado || escribiendoIA}
-            onChange={(e) => setInputMensaje(e.target.value)}
+            onChange={(e) => {
+              setInputMensaje(e.target.value);
+              ajustarAlturaTextarea(e.target);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -197,9 +309,6 @@ export default function ChatSidebar({
             ↑
           </button>
         </div>
-        <span className="chat-input-hint">
-          {chatCompletado ? 'Ronda finalizada' : 'Enter para enviar · Shift+Enter para salto de línea'}
-        </span>
       </form>
     </div>
   );

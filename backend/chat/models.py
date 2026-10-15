@@ -4,6 +4,8 @@ from pathlib import Path
 class Notebook(models.Model):
     name = models.CharField(max_length=150)
     description = models.TextField(blank=True, null=True)
+    syllabus_text = models.TextField(blank=True, null=True)
+    syllabus_file = models.FileField(upload_to='documents/syllabi/%Y/%m/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -35,6 +37,10 @@ class Document(models.Model):
         default=ProcessingStatus.PENDING
     )
     tramos = models.JSONField(default=list, blank=True)
+    answers = models.JSONField(default=dict, blank=True)
+    temp_answers = models.JSONField(default=dict, blank=True)
+    syllabus_text = models.TextField(blank=True, null=True)
+    syllabus_file = models.FileField(upload_to='documents/syllabi/%Y/%m/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

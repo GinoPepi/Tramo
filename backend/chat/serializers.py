@@ -5,7 +5,7 @@ from .models import Notebook, Document
 class DocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
-        fields = ['id', 'notebook', 'title', 'file', 'status', 'tramos', 'created_at']
+        fields = ['id', 'notebook', 'title', 'file', 'syllabus_text', 'syllabus_file', 'status', 'tramos', 'answers', 'temp_answers', 'created_at']
         read_only_fields = ['status', 'tramos', 'created_at']
 
 
@@ -15,4 +15,4 @@ class NotebookSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Notebook
-        fields = ['id', 'name', 'description', 'documents', 'created_at']
+        fields = ['id', 'name', 'description', 'syllabus_text', 'syllabus_file', 'documents', 'created_at']

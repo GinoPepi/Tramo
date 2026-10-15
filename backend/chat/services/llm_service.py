@@ -1,6 +1,6 @@
 from chat.models import Document
 
-def create_tramos(document: Document, programa: str):
+def create_tramos(document: Document):
 
     if document.tramos:
         return document.tramos
@@ -9,11 +9,11 @@ def create_tramos(document: Document, programa: str):
       {
         "id": 1,
         "titulo": "ASDASD TEST 2",
-        "paginas": 'Páginas 1 a 5',
-        "foco": 'Identificar la hipótesis de partida y el concepto principal.',
+        "paginas": 'Páginas 999 a -198273912',
+        "foco": 'TEST FOCO',
         "preguntas": [
-          '¿Cuál es la tesis central que plantea el autor en este tramo?',
-          '¿Cómo se vincula esta definición con el eje de la materia?',
+          '¿ASDASDASD LAKIWEHKLADJ)(*!@&())',
+          '¿AKASJHDIO*@#!CLKLKSCLKACLKSS',
         ],
       },
       {
