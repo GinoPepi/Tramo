@@ -1,0 +1,55 @@
+/* ==========================================================================
+   TRAMO — Obsidian Tech Register Screen
+   Complementa y hereda de Login.css
+   ========================================================================== */
+@import './Login.css';
+
+/* Ajustes específicos para el formulario de registro */
+.register-grid-names {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .register-grid-names {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Validaciones dinámicas en el input de email */
+.login-input.has-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
+}
+
+.login-input.has-warning {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15) !important;
+}
+
+.field-validation-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.field-validation-msg.error {
+  color: #f87171;
+}
+
+.field-validation-msg.warning {
+  color: #38bdf8;
+}
+
+.field-validation-msg .field-link {
+  color: #60a5fa;
+  text-decoration: underline;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: flex-start;
+}
+

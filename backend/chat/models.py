@@ -1,7 +1,17 @@
+import uuid
 from django.db import models
+from django.contrib.auth.models import User
 from pathlib import Path
 
 class Notebook(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notebooks',
+        null=True,
+        blank=True
+    )
     name = models.CharField(max_length=150)
     description = models.TextField(blank=True, null=True)
     syllabus_text = models.TextField(blank=True, null=True)
@@ -24,6 +34,7 @@ class Document(models.Model):
         COMPLETED = 'COMPLETED', 'Completed'
         ERROR = 'ERROR', 'Error'
 
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     notebook = models.ForeignKey(
         Notebook,
         on_delete=models.CASCADE,

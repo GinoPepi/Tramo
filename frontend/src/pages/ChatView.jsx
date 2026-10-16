@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './ChatView.css';
 import ChatSidebar from '../components/ChatSidebar';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import { TrashIcon, ChevronLeftIcon, ChevronDownIcon, FileTextIcon, AlertTriangleIcon, RotateCcwIcon } from '../components/Icons';
+
+// Helper para obtener token JWT de autenticación
+const getAuthHeaders = (extraHeaders = {}) => {
+  const token = localStorage.getItem('tramo_access');
+  return {
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...extraHeaders,
+  };
+};
 
 // Función para conectar con la API de Django
 // Función para iniciar la sesión y obtener los tramos desde el backend
@@ -29,6 +38,7 @@ const iniciarSesionEnBackend = async (documentId, overviewText, overviewFile, do
 
       const patchRes = await fetch(`http://localhost:8000/chat/documents/${documentId}/`, {
         method: 'PATCH',
+        headers: getAuthHeaders(),
         body: formData,
       });
 
@@ -41,9 +51,9 @@ const iniciarSesionEnBackend = async (documentId, overviewText, overviewFile, do
     // 2. Iniciar sesión en el backend (el backend lee el overview directamente del documento)
     const response = await fetch(`http://localhost:8000/chat/documents/${documentId}/start-session/`, {
       method: 'POST',
-      headers: {
+      headers: getAuthHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify({}),
     });
 
@@ -68,9 +78,9 @@ const enviarRespuestaAlBackend = async (documentId, tramoId, preguntaIdx, respue
   try {
     const response = await fetch(`http://localhost:8000/chat/documents/${documentId}/submit-answer/`, {
       method: 'POST',
-      headers: {
+      headers: getAuthHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify({
         tramo_id: tramoId,
         pregunta_idx: preguntaIdx,
@@ -97,9 +107,9 @@ const finalizarSesionEnBackend = async (documentId, action) => {
   try {
     const response = await fetch(`http://localhost:8000/chat/documents/${documentId}/finish-session/`, {
       method: 'POST',
-      headers: {
+      headers: getAuthHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify({ action }),
     });
 
@@ -184,11 +194,13 @@ const verificarSiTieneResumen = (tramosList, respuestasObj) => {
 export default function ChatView() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { documentId: paramDocId, notebookId: paramNotebookId } = useParams();
 
-  // Documento y cuaderno recibidos desde Home.jsx
+  // Documento y cuaderno recibidos desde Home.jsx o desde la URL directa
   const documentoEntrante = location.state?.document;
   const cuadernoEntrante = location.state?.notebook;
-  const notebookId = location.state?.notebookId || documentoEntrante?.notebook || cuadernoEntrante?.id;
+  const targetDocId = paramDocId || documentoEntrante?.id;
+  const notebookId = location.state?.notebookId || documentoEntrante?.notebook || cuadernoEntrante?.id || paramNotebookId;
 
   // Helper para obtener el nombre base del archivo subido (sin extensión)
   const extraerNombreBase = (doc, fallback = '') => {
@@ -252,6 +264,46 @@ export default function ChatView() {
     ...(currentDoc?.temp_answers || {}),
   };
 
+  const consolidandoRef = useRef(false);
+
+  // Consolidar automáticamente temp_answers a answers si el usuario llega al resumen por primera vez
+  const consolidarPrimeraSesionSiAplica = async (docObj = documentoActual || documentoEntrante) => {
+    const docId = docObj?.id;
+    if (!docId || consolidandoRef.current) return;
+
+    const answersExistentes = docObj?.answers && Object.keys(docObj.answers).length > 0;
+    const tempAnswersExistentes = docObj?.temp_answers && Object.keys(docObj.temp_answers).length > 0;
+
+    // Solo se consolida automáticamente si es la PRIMERA VEZ (no hay answers previas y sí hay respuestas temporales)
+    if (!answersExistentes && tempAnswersExistentes) {
+      try {
+        consolidandoRef.current = true;
+        const res = await finalizarSesionEnBackend(docId, 'overwrite');
+        if (res?.status === 'overwritten') {
+          setDocumentoActual((prev) => ({
+            ...(prev || {}),
+            answers: res.answers,
+            temp_answers: {},
+          }));
+          if (res.answers) {
+            setApuntes(formatearApuntesDesdeBackend(res.answers));
+          }
+          setEstadoSesionTexto('✓ ¡Tus notas fueron guardadas exitosamente!');
+        }
+      } catch (err) {
+        console.error('Error al consolidar primera sesión:', err);
+      } finally {
+        consolidandoRef.current = false;
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (paso === 'summary') {
+      consolidarPrimeraSesionSiAplica();
+    }
+  }, [paso, documentoActual]);
+
   const ajustarAlturaTextarea = (el) => {
     if (!el) return;
     el.style.height = 'auto';
@@ -273,6 +325,7 @@ export default function ChatView() {
       formData.append('title', nuevoTitulo);
       const res = await fetch(`http://localhost:8000/chat/documents/${docId}/`, {
         method: 'PATCH',
+        headers: getAuthHeaders(),
         body: formData,
       });
       if (res.ok) {
@@ -321,7 +374,9 @@ export default function ChatView() {
 
   useEffect(() => {
     if (notebookId) {
-      fetch(`http://localhost:8000/chat/notebooks/${notebookId}/`)
+      fetch(`http://localhost:8000/chat/notebooks/${notebookId}/`, {
+        headers: getAuthHeaders(),
+      })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data) setCuadernoActual(data);
@@ -399,7 +454,9 @@ export default function ChatView() {
     setEstadoSesionTexto('');
 
     if (doc.id) {
-      fetch(`http://localhost:8000/chat/documents/${doc.id}/`)
+      fetch(`http://localhost:8000/chat/documents/${doc.id}/`, {
+        headers: getAuthHeaders(),
+      })
         .then((res) => (res.ok ? res.json() : null))
         .then((docData) => {
           if (docData) {
@@ -429,7 +486,7 @@ export default function ChatView() {
         .catch((err) => console.error('Error al consultar tramos del documento:', err));
     }
 
-    navigate('/chat', {
+    navigate(`/document/${doc.id}`, {
       replace: true,
       state: {
         document: doc,
@@ -451,91 +508,102 @@ export default function ChatView() {
   const fileInputRef = useRef(null);
   const overviewFileInputRef = useRef(null);
 
-  // 1. CARGA AUTOMÁTICA SI VIENE DESDE HOME
+  // 1. CARGA AUTOMÁTICA SI VIENE DESDE HOME O POR URL DIRECTA
   useEffect(() => {
-    if (documentoEntrante) {
-      const docId = documentoEntrante.id;
+    const docId = targetDocId;
+    if (!docId) return;
 
-      // Si el documento ya tiene tramos listos localmente, calcular progreso inicial
-      if (Array.isArray(documentoEntrante.tramos) && documentoEntrante.tramos.length > 0) {
-        setTramos(documentoEntrante.tramos);
-        const { tramoIdx: idx, paso: p } = calcularProgreso(documentoEntrante.tramos, respuestasIniciales);
-        setTramoIdx(idx);
-        setPaso(p);
-      }
-
-      // Sincronizar siempre con el backend para tener la versión más fresca de la base de datos
-      if (docId) {
-        fetch(`http://localhost:8000/chat/documents/${docId}/`)
-          .then((res) => (res.ok ? res.json() : null))
-          .then((docData) => {
-            if (docData) {
-              setDocumentoActual(docData);
-              if (docData.title) {
-                setNombreArchivo(docData.title);
-                setTituloDocumento(docData.title);
-              }
-              const respuestasFuente = {
-                ...(docData.answers || {}),
-                ...(docData.temp_answers || {}),
-              };
-
-              if (docData.syllabus_text) {
-                setPrograma(docData.syllabus_text);
-              }
-
-              if (Array.isArray(docData.tramos) && docData.tramos.length > 0) {
-                setTramos(docData.tramos);
-                const { tramoIdx: idx, paso: p } = calcularProgreso(docData.tramos, respuestasFuente);
-                setTramoIdx(idx);
-                setPaso(p);
-              }
-
-              if (Object.keys(respuestasFuente).length > 0) {
-                setApuntes(formatearApuntesDesdeBackend(respuestasFuente));
-              }
-            }
-          })
-          .catch((err) => console.error('Error al consultar tramos del documento:', err));
-      }
-
-      if (documentoEntrante.file) {
-        const base = extraerNombreBase(documentoEntrante, documentoEntrante.title || '');
-        const tit = documentoEntrante.title || base || 'Documento sin título';
-        setNombreArchivo(tit);
-        setTituloDocumento(tit);
-        setNombreOriginalArchivo(base || tit);
-
-        let filePath = documentoEntrante.file;
-        if (!filePath.startsWith('http')) {
-          const cleanPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
-          filePath = `http://localhost:8000${cleanPath}`;
-        }
-
-        // Descargar el archivo y crear un Blob local para el visor (evita X-Frame-Options)
-        fetch(filePath)
-          .then((res) => {
-            if (!res.ok) {
-              throw new Error(`Error ${res.status}: no se encontró en ${filePath}`);
-            }
-            return res.blob();
-          })
-          .then((blob) => {
-            const file = new File([blob], `${documentoEntrante.title || 'documento'}.pdf`, {
-              type: 'application/pdf',
-            });
-            setPdfFile(file);
-
-            const localBlobUrl = URL.createObjectURL(blob);
-            setPdfUrl(localBlobUrl);
-          })
-          .catch((err) => {
-            console.error('Error al cargar el PDF:', err);
-            alert(`No se pudo cargar el archivo: ${err.message}`);
-          });
-      }
+    // Si el documento ya tiene tramos listos localmente, calcular progreso inicial
+    if (documentoEntrante?.tramos && Array.isArray(documentoEntrante.tramos) && documentoEntrante.tramos.length > 0) {
+      setTramos(documentoEntrante.tramos);
+      const { tramoIdx: idx, paso: p } = calcularProgreso(documentoEntrante.tramos, respuestasIniciales);
+      setTramoIdx(idx);
+      setPaso(p);
     }
-  }, [documentoEntrante]);
+
+    // Función auxiliar para cargar el blob del PDF en memoria
+    const descargarBlobPdf = (archivoUrl, titulo) => {
+      let filePath = archivoUrl;
+      if (!filePath.startsWith('http')) {
+        const cleanPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
+        filePath = `http://localhost:8000${cleanPath}`;
+      }
+
+      fetch(filePath)
+        .then((res) => {
+          if (!res.ok) throw new Error(`Error ${res.status}: no se encontró en ${filePath}`);
+          return res.blob();
+        })
+        .then((blob) => {
+          const file = new File([blob], `${titulo || 'documento'}.pdf`, {
+            type: 'application/pdf',
+          });
+          setPdfFile(file);
+          const localBlobUrl = URL.createObjectURL(blob);
+          setPdfUrl(localBlobUrl);
+        })
+        .catch((err) => {
+          console.error('Error al cargar el PDF:', err);
+        });
+    };
+
+    if (documentoEntrante?.file && !pdfUrl) {
+      descargarBlobPdf(documentoEntrante.file, documentoEntrante.title);
+    }
+
+    // Sincronizar siempre con el backend para tener la versión más fresca de la base de datos
+    fetch(`http://localhost:8000/chat/documents/${docId}/`, {
+      headers: getAuthHeaders(),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((docData) => {
+        if (docData) {
+          setDocumentoActual(docData);
+          const base = extraerNombreBase(docData, docData.title || '');
+          const tit = docData.title || base || 'Documento sin título';
+          setNombreArchivo(tit);
+          setTituloDocumento(tit);
+          setNombreOriginalArchivo(base || tit);
+
+          const respuestasFuente = {
+            ...(docData.answers || {}),
+            ...(docData.temp_answers || {}),
+          };
+
+          if (docData.syllabus_text) {
+            setPrograma(docData.syllabus_text);
+          }
+
+          if (Array.isArray(docData.tramos) && docData.tramos.length > 0) {
+            setTramos(docData.tramos);
+            const { tramoIdx: idx, paso: p } = calcularProgreso(docData.tramos, respuestasFuente);
+            setTramoIdx(idx);
+            setPaso(p);
+          }
+
+          if (Object.keys(respuestasFuente).length > 0) {
+            setApuntes(formatearApuntesDesdeBackend(respuestasFuente));
+          }
+
+          if (docData.file && !pdfUrl) {
+            descargarBlobPdf(docData.file, docData.title);
+          }
+
+          // Si vino por URL directa y aún no tenemos el cuaderno cargado
+          if (docData.notebook && !cuadernoActual) {
+            fetch(`http://localhost:8000/chat/notebooks/${docData.notebook}/`, {
+              headers: getAuthHeaders(),
+            })
+              .then((res) => (res.ok ? res.json() : null))
+              .then((nbData) => {
+                if (nbData) setCuadernoActual(nbData);
+              })
+              .catch((err) => console.error('Error al cargar cuaderno:', err));
+          }
+        }
+      })
+      .catch((err) => console.error('Error al consultar datos del documento:', err));
+  }, [targetDocId]);
 
   // Liberar memoria del Blob al salir
   useEffect(() => {
@@ -695,13 +763,9 @@ export default function ChatView() {
         }
       : null;
 
-    if (notebookId || targetNotebook) {
-      navigate('/', {
-        state: {
-          notebookId: notebookId || targetNotebook?.id,
-          notebook: updatedNotebook,
-        },
-      });
+    const targetNbId = notebookId || targetNotebook?.id || currentDoc?.notebook;
+    if (targetNbId) {
+      navigate(`/notebook/${targetNbId}`);
     } else {
       navigate('/');
     }
@@ -715,6 +779,7 @@ export default function ChatView() {
       setEliminandoDoc(true);
       const res = await fetch(`http://localhost:8000/chat/documents/${docId}/`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
 
       if (!res.ok && res.status !== 204) {
@@ -724,19 +789,12 @@ export default function ChatView() {
       setModalEliminarAbierto(false);
 
       const targetNotebook = cuadernoActual || cuadernoEntrante;
-      const updatedNotebook = targetNotebook
-        ? {
-            ...targetNotebook,
-            documents: (targetNotebook.documents || []).filter((d) => d.id !== docId),
-          }
-        : null;
-
-      navigate('/', {
-        state: {
-          notebookId: notebookId || targetNotebook?.id,
-          notebook: updatedNotebook,
-        },
-      });
+      const targetNbId = notebookId || targetNotebook?.id || currentDoc?.notebook;
+      if (targetNbId) {
+        navigate(`/notebook/${targetNbId}`);
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       alert(err.message);
     } finally {
@@ -1093,7 +1151,7 @@ export default function ChatView() {
             apuntes={apuntes}
             onVolverLectura={() => setPaso('reading')}
             onVolverResumen={
-              editandoDesdeResumen || puedeVerResumen
+              editandoDesdeResumen || (currentDoc?.answers && Object.keys(currentDoc.answers).length > 0)
                 ? () => {
                     setEditandoDesdeResumen(false);
                     setPaso('summary');
@@ -1130,7 +1188,7 @@ export default function ChatView() {
               }
             }}
             onAvanzar={() => {
-              if (editandoDesdeResumen || puedeVerResumen) {
+              if (editandoDesdeResumen) {
                 setEditandoDesdeResumen(false);
                 setPaso('summary');
                 return;
@@ -1140,24 +1198,7 @@ export default function ChatView() {
                 setPaso('reading');
               } else {
                 setPaso('summary');
-                const docId = documentoActual?.id || documentoEntrante?.id;
-                const currentDoc = documentoActual || documentoEntrante;
-                const tieneRespuestasPrevias =
-                  currentDoc?.answers && Object.keys(currentDoc.answers).length > 0;
-
-                // Si es la primera vez que se completa, promovemos automáticamente temp_answers a answers
-                if (docId && !tieneRespuestasPrevias) {
-                  finalizarSesionEnBackend(docId, 'overwrite').then((res) => {
-                    if (res?.status === 'overwritten') {
-                      setDocumentoActual((prev) => ({
-                        ...(prev || {}),
-                        answers: res.answers,
-                        temp_answers: {},
-                      }));
-                      setEstadoSesionTexto('✓ ¡Tus notas fueron guardadas exitosamente!');
-                    }
-                  });
-                }
+                consolidarPrimeraSesionSiAplica();
               }
             }}
           />

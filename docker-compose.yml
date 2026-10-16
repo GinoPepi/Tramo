@@ -20,6 +20,9 @@ services:
 
   frontend:
     build: ./frontend
+    env_file: .env
+    environment:
+      - VITE_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     command: npm run dev -- --host
     volumes:
       - ./frontend:/app  # This syncs your React code instantly

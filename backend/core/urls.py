@@ -19,10 +19,19 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
+from django.views.generic import RedirectView
+from dj_rest_auth.registration.views import VerifyEmailView
+from chat.views import CheckEmailView, GoogleLogin
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('chat/', include('chat.urls')),
+    path('auth/google/', GoogleLogin.as_view(), name='google_login'),
+    path('auth/check-email/', CheckEmailView.as_view(), name='check_email'),
+    path('auth/', include('dj_rest_auth.urls')),
+    path('auth/registration/', include('dj_rest_auth.registration.urls')),
+    path('auth/account-confirm-email/<str:key>/', RedirectView.as_view(url='http://localhost:5173/verify-email/%(key)s/', permanent=False), name='account_confirm_email'),
+    path('auth/account-confirm-email/', VerifyEmailView.as_view(), name='account_email_verification_sent'),
 ]
 
 if settings.DEBUG:

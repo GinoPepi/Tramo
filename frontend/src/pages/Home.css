@@ -169,15 +169,49 @@
 .obsidian-stage-container {
   width: 90%;
   max-width: 1140px;
-  height: 82vh;
+  height: 88vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 18px;
+}
+
+.brand-external-header {
+  text-align: center;
+  user-select: none;
+}
+
+.brand-logo-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: #f8fafc;
+  text-transform: uppercase;
+}
+
+.brand-logo-title.brand-link {
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.brand-logo-title.brand-link:hover {
+  opacity: 0.85;
+}
+
+.brand-logo-subtitle {
+  margin: 5px 0 0 0;
+  font-size: 13px;
+  color: #828a9e;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .obsidian-canvas {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   background: var(--surface-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 20px;

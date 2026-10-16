@@ -1,21 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Home.css';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
+import BrandHeader from '../components/BrandHeader';
 import { TrashIcon, ChevronLeftIcon, ChevronDownIcon, FileTextIcon, PlusIcon } from '../components/Icons';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE = 'http://localhost:8000/chat';
 
 export default function Home() {
+  const { user, logout, authFetch } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const { notebookId } = useParams();
 
   const [notebooks, setNotebooks] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
   const [menuAbierto, setMenuAbierto] = useState(false);
-  const [cuadernoActivo, setCuadernoActivo] = useState(() => location.state?.notebook || null);
+  const [cuadernoActivo, setCuadernoActivo] = useState(null);
   const [subiendoDoc, setSubiendoDoc] = useState(false);
 
   // Estados para la burbuja de nuevo cuaderno
@@ -47,15 +51,15 @@ export default function Home() {
   const inputNombreRef = useRef(null);
 
   const usuario = {
-    nombre: 'Gino',
-    email: 'usuario@ejemplo.com',
+    nombre: user?.first_name?.trim() || 'Usuario',
+    email: user?.email || 'usuario@tramo.app',
   };
 
   const abrirChatDocumento = (doc, cuaderno = cuadernoActivo) => {
     const freshCuaderno = notebooks.find((n) => n.id === (cuaderno?.id || doc?.notebook)) || cuaderno;
     const freshDoc = freshCuaderno?.documents?.find((d) => d.id === doc.id) || doc;
 
-    navigate('/chat', {
+    navigate(`/document/${freshDoc.id}`, {
       state: {
         document: freshDoc,
         notebook: freshCuaderno,
@@ -66,7 +70,7 @@ export default function Home() {
 
   const volverAListaCuadernos = () => {
     setCuadernoActivo(null);
-    navigate('/', { replace: true, state: {} });
+    navigate('/');
   };
 
   // 1. GET: Cargar cuadernos
@@ -74,14 +78,17 @@ export default function Home() {
     try {
       setCargando(true);
       setError(null);
-      const res = await fetch(`${API_BASE}/notebooks/`);
+      const res = await authFetch(`${API_BASE}/notebooks/`);
+      if (res.status === 401) {
+        throw new Error('No iniciaste sesión o tu sesión expiró. Por favor ingresá con tu cuenta.');
+      }
       if (!res.ok) throw new Error('No se pudo conectar con el catálogo de cuadernos.');
       const data = await res.json();
       setNotebooks(data);
 
-      const targetId = location.state?.notebookId || location.state?.notebook?.id;
+      const targetId = notebookId || location.state?.notebookId || location.state?.notebook?.id;
       if (targetId) {
-        const found = data.find((n) => n.id === targetId);
+        const found = data.find((n) => String(n.id) === String(targetId));
         if (found) {
           setCuadernoActivo(found);
         }
@@ -97,20 +104,20 @@ export default function Home() {
     cargarCuadernos();
   }, []);
 
-  // Sincronizar cuadernoActivo si location.state cambia o al cargar notebooks frescos
+  // Sincronizar cuadernoActivo con la URL (/notebook/:notebookId) o notebooks frescos
   useEffect(() => {
-    const targetId = location.state?.notebookId || location.state?.notebook?.id;
+    const targetId = notebookId || location.state?.notebookId || location.state?.notebook?.id;
     if (targetId && notebooks.length > 0) {
-      const found = notebooks.find((n) => n.id === targetId);
+      const found = notebooks.find((n) => String(n.id) === String(targetId));
       if (found) {
         setCuadernoActivo(found);
         return;
       }
     }
-    if (location.state?.notebook) {
-      setCuadernoActivo(location.state.notebook);
+    if (!targetId) {
+      setCuadernoActivo(null);
     }
-  }, [location.state, notebooks]);
+  }, [notebookId, location.state, notebooks]);
 
   // Autofoco y escape en el modal
   useEffect(() => {
@@ -143,7 +150,7 @@ export default function Home() {
 
     try {
       setGuardando(true);
-      const res = await fetch(`${API_BASE}/notebooks/`, {
+      const res = await authFetch(`${API_BASE}/notebooks/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: nombreLimpio }),
@@ -178,7 +185,7 @@ export default function Home() {
 
     try {
       setGuardandoDesc(true);
-      const res = await fetch(`${API_BASE}/notebooks/${cuadernoActivo.id}/`, {
+      const res = await authFetch(`${API_BASE}/notebooks/${cuadernoActivo.id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: nuevaDescripcion.trim() }),
@@ -217,7 +224,7 @@ export default function Home() {
 
     try {
       setGuardandoTitulo(true);
-      const res = await fetch(`${API_BASE}/notebooks/${cuadernoActivo.id}/`, {
+      const res = await authFetch(`${API_BASE}/notebooks/${cuadernoActivo.id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: nombreLimpio }),
@@ -267,7 +274,7 @@ export default function Home() {
         formData.append('syllabus_file', '');
       }
 
-      const res = await fetch(`${API_BASE}/notebooks/${cuadernoActivo.id}/`, {
+      const res = await authFetch(`${API_BASE}/notebooks/${cuadernoActivo.id}/`, {
         method: 'PATCH',
         body: formData,
       });
@@ -315,7 +322,7 @@ export default function Home() {
 
     try {
       setSubiendoDoc(true);
-      const res = await fetch(`${API_BASE}/documents/`, {
+      const res = await authFetch(`${API_BASE}/documents/`, {
         method: 'POST',
         body: formData,
       });
@@ -363,7 +370,7 @@ export default function Home() {
   const ejecutarEliminarCuaderno = async (cuadernoId) => {
     try {
       setEliminandoItem(true);
-      const res = await fetch(`${API_BASE}/notebooks/${cuadernoId}/`, {
+      const res = await authFetch(`${API_BASE}/notebooks/${cuadernoId}/`, {
         method: 'DELETE',
       });
 
@@ -398,7 +405,7 @@ export default function Home() {
   const ejecutarEliminarDocumento = async (docId) => {
     try {
       setEliminandoItem(true);
-      const res = await fetch(`${API_BASE}/documents/${docId}/`, {
+      const res = await authFetch(`${API_BASE}/documents/${docId}/`, {
         method: 'DELETE',
       });
 
@@ -459,7 +466,6 @@ export default function Home() {
         {menuAbierto && (
           <div className="user-popover-card">
             <div className="popover-meta">
-              <span className="meta-tag">SESIÓN ACTIVA</span>
               <span className="meta-name">{usuario.nombre}</span>
               <span className="meta-email">{usuario.email}</span>
             </div>
@@ -470,7 +476,7 @@ export default function Home() {
               <button onClick={() => alert('Mi perfil')}>Mi Perfil</button>
               <button onClick={() => alert('Configurar')}>Configurar cuenta</button>
               <div className="popover-divider" />
-              <button className="btn-logout" onClick={() => alert('Cerrar sesión')}>
+              <button className="btn-logout" onClick={logout}>
                 Cerrar Sesión
               </button>
             </nav>
@@ -480,6 +486,8 @@ export default function Home() {
 
       {/* 2. ÁREA CENTRAL */}
       <main className="obsidian-stage-container">
+        <BrandHeader clickable onClick={volverAListaCuadernos} />
+
         <section className="obsidian-canvas">
           {cargando && !cuadernoActivo ? (
             <div className="canvas-state-msg">
@@ -673,7 +681,7 @@ export default function Home() {
                   key={cuaderno.id}
                   className="notebook-shelf-card"
                   onClick={() => {
-                    navigate('/', { replace: true, state: { notebookId: cuaderno.id, notebook: cuaderno } });
+                    navigate(`/notebook/${cuaderno.id}`);
                     setCuadernoActivo(cuaderno);
                   }}
                 >
