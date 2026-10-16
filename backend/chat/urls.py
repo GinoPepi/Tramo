@@ -11,4 +11,3 @@ urlpatterns = [
     # Add your API endpoints here
     path('', include(router.urls)),
 ]
-

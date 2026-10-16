@@ -20,6 +20,7 @@ services:
 
   frontend:
     build: ./frontend
+    env_file: .env
     command: npm run dev -- --host
     volumes:
       - ./frontend:/app  # This syncs your React code instantly
