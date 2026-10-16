@@ -1,0 +1,85 @@
+/* ==========================================================================
+   TRAMO — Expandable Google OAuth Button
+   Compact icon button that smoothly reveals the full label to the right on hover.
+   ========================================================================== */
+
+.google-auth-btn-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.btn-expand-google {
+  background: #10131c;
+  border: 1px solid #232938;
+  padding: 8px 11px;
+  border-radius: 9999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  outline: none;
+}
+
+.btn-expand-google .google-icon-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.btn-expand-google .google-text-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #94a3b8;
+  transition: max-width 0.28s cubic-bezier(0.16, 1, 0.3, 1), 
+              opacity 0.2s ease, 
+              margin 0.2s ease,
+              color 0.2s ease;
+  margin-left: 0;
+  user-select: none;
+}
+
+.btn-expand-google:hover,
+.btn-expand-google:focus-visible {
+  background: #181d2a;
+  border-color: rgba(147, 197, 253, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(147, 197, 253, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-expand-google:hover .google-icon-box,
+.btn-expand-google:focus-visible .google-icon-box {
+  transform: scale(1.06);
+}
+
+.btn-expand-google:hover .google-text-label,
+.btn-expand-google:focus-visible .google-text-label {
+  max-width: 230px;
+  opacity: 1;
+  margin-left: 9px;
+  margin-right: 4px;
+  color: #f1f5f9;
+}
+
+.btn-expand-google:active {
+  transform: scale(0.97);
+}
+
+.btn-expand-google:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

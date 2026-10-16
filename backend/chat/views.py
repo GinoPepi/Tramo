@@ -1,7 +1,13 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, permissions
+from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
+from django.contrib.auth.models import User
+from allauth.account.models import EmailAddress
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from dj_rest_auth.registration.views import SocialLoginView
 from .services.llm_service import create_tramos
 
 from .models import Notebook, Document
@@ -11,14 +17,29 @@ from .serializers import (
 )
 
 class NotebookViewSet(viewsets.ModelViewSet):
-    queryset = Notebook.objects.all().prefetch_related('documents')
     serializer_class = NotebookSerializer
+    permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def get_queryset(self):
+        return Notebook.objects.filter(user=self.request.user).prefetch_related('documents')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 class DocumentViewSet(viewsets.ModelViewSet):
-    queryset = Document.objects.all()
     serializer_class = DocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        return Document.objects.filter(notebook__user=self.request.user)
+
+    def perform_create(self, serializer):
+        notebook = serializer.validated_data.get('notebook')
+        if notebook and notebook.user != self.request.user:
+            raise PermissionDenied("No tenés permiso para agregar documentos a este cuaderno.")
+        serializer.save()
 
     @action(detail=True, methods=['post'], url_path='start-session')
     def start_session(self, request, pk=None):
@@ -78,3 +99,34 @@ class DocumentViewSet(viewsets.ModelViewSet):
             {"error": "Acción inválida. Usa 'overwrite' o 'discard'."},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+class CheckEmailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        if not email:
+            return Response({'error': 'El correo es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        email_record = EmailAddress.objects.filter(email__iexact=email).first()
+        user_exists = User.objects.filter(email__iexact=email).exists()
+
+        if email_record:
+            return Response({
+                'exists': True,
+                'verified': email_record.verified,
+            }, status=status.HTTP_200_OK)
+        elif user_exists:
+            return Response({
+                'exists': True,
+                'verified': False,
+            }, status=status.HTTP_200_OK)
+
+        return Response({
+            'exists': False,
+            'verified': False,
+        }, status=status.HTTP_200_OK)
+
+
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
